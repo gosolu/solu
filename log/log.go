@@ -35,7 +35,7 @@ const (
 	stacktraceKeyName = "g_stack"
 )
 
-func initLogger(level string, fw zapcore.WriteSyncer, stdout bool) (*zap.Logger, error) {
+func initLogger(level string, sampling *zap.SamplingConfig, syncers ...zapcore.WriteSyncer) (*zap.Logger, error) {
 	var logLevel zapcore.Level
 	switch strings.ToLower(level) {
 	case LogLevelDebug:
@@ -52,14 +52,7 @@ func initLogger(level string, fw zapcore.WriteSyncer, stdout bool) (*zap.Logger,
 		logLevel = zapcore.InfoLevel
 	}
 
-	if stdout {
-		if isNil(fw) {
-			fw = zapcore.AddSync(os.Stdout)
-		} else {
-			fw = zapcore.NewMultiWriteSyncer(fw, os.Stdout)
-		}
-	}
-	if isNil(fw) {
+	if len(syncers) < 1 {
 		return nil, errors.New("No output writer")
 	}
 
@@ -75,9 +68,12 @@ func initLogger(level string, fw zapcore.WriteSyncer, stdout bool) (*zap.Logger,
 		EncodeDuration: zapcore.StringDurationEncoder,
 		EncodeCaller:   zapcore.ShortCallerEncoder,
 	}
-	core := zapcore.NewCore(zapcore.NewJSONEncoder(encoderConfig), fw, logLevel)
-	samplerCore := zapcore.NewSampler(core, time.Second, 100, 100)
-	logger := zap.New(samplerCore, zap.AddCaller(), zap.AddCallerSkip(1), zap.AddStacktrace(zap.DPanicLevel))
+	syncer := zapcore.NewMultiWriteSyncer(syncers...)
+	core := zapcore.NewCore(zapcore.NewJSONEncoder(encoderConfig), syncer, logLevel)
+	if sampling != nil {
+		core = zapcore.NewSampler(core, time.Second, sampling.Initial, sampling.Thereafter)
+	}
+	logger := zap.New(core, zap.AddCaller(), zap.AddCallerSkip(1), zap.AddStacktrace(zap.DPanicLevel))
 
 	return logger, nil
 }
@@ -96,19 +92,21 @@ type Logger struct {
 	core *zap.Logger
 
 	// some original configurations
-	dir, filename string
 	level         string
+	dir, filename string
+	maxFileSize   int
+	fileRotate    time.Duration
+	sampleFirst   int
+	sampleAfter   int
 
-	stdoutLog bool
-	fileLog   bool
-
-	fw *fileLogger // file writer
+	sinkStdout bool
+	sinkFile   bool
 }
 
 var gLogger *Logger
 
 func init() {
-	core, err := initLogger(LogLevelInfo, nil, true)
+	core, err := initLogger(LogLevelInfo, nil, zapcore.AddSync(os.Stdout))
 	if err != nil {
 		panic(err)
 	}
@@ -126,22 +124,6 @@ func newTraceID() string {
 	return hex.EncodeToString(bts[:])
 }
 
-// Option for logger
-type Option func(*Logger) error
-
-// File option set logger's output file directory and filename
-func File(dir, filename string) Option {
-	return func(logger *Logger) error {
-		if dir != "" {
-			logger.dir = dir
-		}
-		if filename != "" {
-			logger.filename = filename
-		}
-		return nil
-	}
-}
-
 var allowedLevels = []string{
 	LogLevelDebug,
 	LogLevelInfo,
@@ -153,6 +135,9 @@ var allowedLevels = []string{
 var (
 	ErrInvalidLevel = errors.New("Invalid log level")
 )
+
+// Option for logger
+type Option func(*Logger) error
 
 // Level option set logger's log level
 func Level(lvl string) Option {
@@ -172,10 +157,43 @@ func Level(lvl string) Option {
 	}
 }
 
+// Sample configure log sampling first and thereafter within time.Second
+func Sample(first, thereafter int) Option {
+	return func(logger *Logger) error {
+		if first <= 0 {
+			return fmt.Errorf("invalid sample first: %d", first)
+		}
+		logger.sampleFirst = first
+		logger.sampleAfter = thereafter
+		return nil
+	}
+}
+
+// File option set logger's output file directory and filename
+func File(dir, filename string, max int, rotate time.Duration) Option {
+	return func(logger *Logger) error {
+		if dir == "" {
+			dir, _ = os.Getwd()
+		}
+		logger.dir = dir
+		if filename != "" {
+			logger.filename = filename
+			logger.sinkFile = true
+		}
+		if max > 0 {
+			logger.maxFileSize = max
+		}
+		if rotate > 0 {
+			logger.fileRotate = rotate
+		}
+		return nil
+	}
+}
+
 // Stdout option set logger output to stdout
 func Stdout() Option {
 	return func(logger *Logger) error {
-		logger.stdoutLog = true
+		logger.sinkStdout = true
 		return nil
 	}
 }
@@ -189,19 +207,28 @@ func New(opts ...Option) (*Logger, error) {
 		}
 	}
 
-	var fw *fileLogger
-	if logger.fileLog {
-		var err error
-		if logger.filename != "" {
-			fw, err = newFileLogger(logger.dir, logger.filename, 0, rotateModeNone)
-			if err != nil {
-				return nil, err
-			}
-			logger.fw = fw
+	syncers := make([]zapcore.WriteSyncer, 0, 2)
+	if logger.sinkFile {
+		fw, err := newFileWriter(logger.dir, logger.filename, logger.maxFileSize, logger.fileRotate)
+		if err != nil {
+			return nil, err
+		}
+		syncers = append(syncers, fw)
+	}
+	if logger.sinkStdout {
+		writer := newConsoleWriter()
+		syncers = append(syncers, zapcore.AddSync(writer))
+	}
+	// sampling configuration
+	var sampling *zap.SamplingConfig
+	if logger.sampleFirst > 0 {
+		sampling = &zap.SamplingConfig{
+			Initial:    logger.sampleFirst,
+			Thereafter: logger.sampleAfter,
 		}
 	}
 
-	core, err := initLogger(logger.level, fw, logger.stdoutLog)
+	core, err := initLogger(logger.level, sampling, syncers...)
 	if err != nil {
 		return nil, err
 	}

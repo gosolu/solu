@@ -2,4 +2,7 @@ module solu
 
 go 1.16
 
-require go.uber.org/zap v1.18.1
+require (
+	github.com/prometheus/client_golang v1.11.0
+	go.uber.org/zap v1.18.1
+)
