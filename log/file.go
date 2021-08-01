@@ -11,8 +11,8 @@ import (
 type rotateMode int
 
 const (
-	rotateModeNone   rotateMode = iota
-	rotateModeHourly            = iota
+	rotateModeNone rotateMode = iota
+	rotateModeHourly
 	rotateModeDaily
 	rotateModeWeekly
 )
