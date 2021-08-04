@@ -1,4 +1,4 @@
-package conf
+package sconf
 
 type Service struct {
 	Name string `json:"name" toml:"name"`

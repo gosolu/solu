@@ -1,10 +1,13 @@
-// httpc contains some golang HTTP client methods
-package httpc
+// Package shttp contains some golang HTTP client methods
+package shttp
 
 import (
 	"context"
 	"io"
 )
+
+type Options struct {
+}
 
 func Get(ctx context.Context, addr string) {
 }

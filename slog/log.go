@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"reflect"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -76,10 +75,6 @@ func initLogger(level string, sampling *zap.SamplingConfig, syncers ...zapcore.W
 	logger := zap.New(core, zap.AddCaller(), zap.AddCallerSkip(1), zap.AddStacktrace(zap.DPanicLevel))
 
 	return logger, nil
-}
-
-func isNil(i interface{}) bool {
-	return i == nil || reflect.ValueOf(i).IsNil()
 }
 
 type noCopy struct{}

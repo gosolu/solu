@@ -1,5 +1,5 @@
 # solu
-**solu** is a golang service SOLUtion.
+**solu** is a golang service ***SOLU***tion.
 
 
 ### Usage
