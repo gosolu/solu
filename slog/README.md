@@ -1,4 +1,4 @@
-# log
+# slog
 A simple golang log library.
 
 
@@ -15,11 +15,11 @@ package main
 import (
     "context"
 
-    "github.com/gosolu/solu/log"
+    "github.com/gosolu/solu/slog"
 )
 
 func doThings(ctx context.Context, num int) {
-    log.In(ctx).With(log.Int("num", num)).Info("do things")
+    slog.In(ctx).With(slog.Int("num", num)).Info("do things")
     // other logic codes
 }
 
@@ -46,6 +46,4 @@ Why rotate?
 
 
 
-### LICENSE
-MIT LICENSE
 
