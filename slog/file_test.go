@@ -13,8 +13,7 @@ func TestFileWriterRotate(t *testing.T) {
 	dir := os.TempDir()
 	filename := fmt.Sprintf("file_%d.log", time.Now().Unix())
 	max := 1000
-	rotate := time.Minute
-	writer, err := newFileWriter(dir, filename, max, rotate)
+	writer, err := newFileWriter(dir, filename, max, FileRotateNone)
 	if err != nil {
 		t.Error(err)
 		return
@@ -34,8 +33,7 @@ func TestFileWriterMaxRotate(t *testing.T) {
 	dir := os.TempDir()
 	filename := fmt.Sprintf("file_%d.log", time.Now().Unix())
 	max := 100
-	rotate := time.Duration(0)
-	writer, err := newFileWriter(dir, filename, max, rotate)
+	writer, err := newFileWriter(dir, filename, max, FileRotateDaily)
 	if err != nil {
 		t.Error(err)
 		return
@@ -62,8 +60,7 @@ func TestFileWriterWritter(t *testing.T) {
 	dir := os.TempDir()
 	filename := fmt.Sprintf("file_%d.log", time.Now().Unix())
 	max := 2 << 10
-	rotate := time.Duration(0)
-	writer, err := newFileWriter(dir, filename, max, rotate)
+	writer, err := newFileWriter(dir, filename, max, FileRotateHourly)
 	if err != nil {
 		t.Error(err)
 		return

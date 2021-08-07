@@ -90,7 +90,7 @@ type Logger struct {
 	level         string
 	dir, filename string
 	maxFileSize   int
-	fileRotate    time.Duration
+	fileRotate    fileRotateMode
 	sampleFirst   int
 	sampleAfter   int
 
@@ -165,7 +165,7 @@ func Sample(first, thereafter int) Option {
 }
 
 // File option set logger's output file directory and filename
-func File(dir, filename string, max int, rotate time.Duration) Option {
+func File(dir, filename string, max int, rotate fileRotateMode) Option {
 	return func(logger *Logger) error {
 		if dir == "" {
 			dir, _ = os.Getwd()

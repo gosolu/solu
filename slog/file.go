@@ -8,6 +8,15 @@ import (
 	"time"
 )
 
+type fileRotateMode int
+
+const (
+	FileRotateNone fileRotateMode = iota
+	FileRotateHourly
+	FileRotateDaily
+	FileRotateMonthly
+)
+
 type fileWriter struct {
 	mux sync.RWMutex
 
@@ -21,16 +30,38 @@ type fileWriter struct {
 	Dir      string
 	Filename string
 	MaxSize  int
-	Rotate   time.Duration
+	Rotate   fileRotateMode
 }
 
-func newFileWriter(dir, filename string, max int, rotate time.Duration) (*fileWriter, error) {
+func initRotateTimer(mode fileRotateMode) *time.Timer {
+	var timer *time.Timer
+	now := time.Now()
+	next := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 0, 0, 0, time.Local)
+	switch mode {
+	case FileRotateHourly:
+		next = next.Add(time.Hour)
+		timer = time.NewTimer(next.Sub(now))
+	case FileRotateDaily:
+		next = next.AddDate(0, 0, 1)
+		timer = time.NewTimer(next.Sub(now))
+	case FileRotateMonthly:
+		next = next.AddDate(0, 1, 0)
+		timer = time.NewTimer(next.Sub(now))
+	case FileRotateNone:
+		fallthrough
+	default:
+		timer = nil
+	}
+	return timer
+}
+
+func newFileWriter(dir, filename string, max int, rotate fileRotateMode) (*fileWriter, error) {
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return nil, err
 	}
 	var timer *time.Timer
 	if rotate > 0 {
-		timer = time.NewTimer(rotate)
+		timer = initRotateTimer(rotate)
 	}
 	logger := &fileWriter{
 		Dir:      dir,
@@ -82,7 +113,7 @@ func (fw *fileWriter) rotate() (err error) {
 }
 
 func (fw *fileWriter) resetTimer() {
-	fw.timer = time.NewTimer(fw.Rotate)
+	fw.timer = initRotateTimer(fw.Rotate)
 }
 
 func (fw *fileWriter) initFile() error {
