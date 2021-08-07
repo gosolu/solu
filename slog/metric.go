@@ -29,5 +29,6 @@ func init() {
 	prometheus.MustRegister(
 		fileRotateCounter,
 		fileWriteCounter,
+		consoleWriteCounter,
 	)
 }
