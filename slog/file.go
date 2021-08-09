@@ -23,9 +23,9 @@ type fileWriter struct {
 	// DO NOT copy this logger
 	noCopy noCopy
 
-	fs    *os.File
-	size  int
-	timer *time.Timer
+	fs       *os.File
+	size     int
+	deadline int64
 
 	Dir      string
 	Filename string
@@ -33,35 +33,31 @@ type fileWriter struct {
 	Rotate   fileRotateMode
 }
 
-func initRotateTimer(mode fileRotateMode) *time.Timer {
-	var timer *time.Timer
+func resetRotateTime(mode fileRotateMode) int64 {
 	now := time.Now()
 	next := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 0, 0, 0, time.Local)
 	switch mode {
 	case FileRotateHourly:
 		next = next.Add(time.Hour)
-		timer = time.NewTimer(next.Sub(now))
 	case FileRotateDaily:
 		next = next.AddDate(0, 0, 1)
-		timer = time.NewTimer(next.Sub(now))
 	case FileRotateMonthly:
 		next = next.AddDate(0, 1, 0)
-		timer = time.NewTimer(next.Sub(now))
 	case FileRotateNone:
 		fallthrough
 	default:
-		timer = nil
+		return 0
 	}
-	return timer
+	return next.Unix()
 }
 
 func newFileWriter(dir, filename string, max int, rotate fileRotateMode) (*fileWriter, error) {
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return nil, err
 	}
-	var timer *time.Timer
+	var deadline int64
 	if rotate > 0 {
-		timer = initRotateTimer(rotate)
+		deadline = resetRotateTime(rotate)
 	}
 	logger := &fileWriter{
 		Dir:      dir,
@@ -69,7 +65,7 @@ func newFileWriter(dir, filename string, max int, rotate fileRotateMode) (*fileW
 		MaxSize:  max,
 		Rotate:   rotate,
 
-		timer: timer,
+		deadline: deadline,
 	}
 	if err := logger.initFile(); err != nil {
 		return nil, err
@@ -79,9 +75,8 @@ func newFileWriter(dir, filename string, max int, rotate fileRotateMode) (*fileW
 
 const timestampFormat = "20060102150405"
 
-func currentTimestamp() string {
-	now := time.Now()
-	return now.Format(timestampFormat)
+func timestampSuffix(t int64) string {
+	return time.Unix(t, 0).Format(timestampFormat)
 }
 
 func (fw *fileWriter) rotate() (err error) {
@@ -97,7 +92,7 @@ func (fw *fileWriter) rotate() (err error) {
 		return err
 	}
 
-	backupFilename := fmt.Sprintf("%s-%s", fw.Filename, currentTimestamp())
+	backupFilename := fmt.Sprintf("%s-%s", fw.Filename, timestampSuffix(fw.deadline))
 
 	oldpath := filepath.Join(fw.Dir, fw.Filename)
 	newpath := filepath.Join(fw.Dir, backupFilename)
@@ -113,7 +108,7 @@ func (fw *fileWriter) rotate() (err error) {
 }
 
 func (fw *fileWriter) resetTimer() {
-	fw.timer = initRotateTimer(fw.Rotate)
+	fw.deadline = resetRotateTime(fw.Rotate)
 }
 
 func (fw *fileWriter) initFile() error {
@@ -147,14 +142,13 @@ func (fw *fileWriter) Write(data []byte) (n int, err error) {
 		}
 	}
 
-	if fw.timer != nil {
-		select {
-		case <-fw.timer.C:
+	if fw.deadline > 0 {
+		now := time.Now()
+		if now.Unix() > fw.deadline {
 			if err = fw.rotate(); err != nil {
 				return 0, err
 			}
 			fw.resetTimer()
-		default:
 		}
 	}
 
