@@ -25,13 +25,14 @@ const (
 )
 
 const (
-	traceKeyName = "g_tid"
+	traceKeyName = "gTrace"
+	spanKeyName  = "gSpan"
 
-	timeKeyName       = "g_ts"
-	levelKeyName      = "g_level"
-	callerKeyName     = "g_caller"
-	messageKeyName    = "g_msg"
-	stacktraceKeyName = "g_stack"
+	timeKeyName       = "gTime"
+	levelKeyName      = "gLevel"
+	callerKeyName     = "gCaller"
+	messageKeyName    = "gMsg"
+	stacktraceKeyName = "gStack"
 )
 
 func initLogger(level string, sampling *zap.SamplingConfig, syncers ...zapcore.WriteSyncer) (*zap.Logger, error) {
@@ -101,7 +102,7 @@ type Logger struct {
 var gLogger *Logger
 
 func init() {
-	core, err := initLogger(LogLevelInfo, nil, zapcore.AddSync(os.Stdout))
+	core, err := initLogger(LogLevelDebug, nil, zapcore.AddSync(os.Stdout))
 	if err != nil {
 		panic(err)
 	}
@@ -193,8 +194,8 @@ func Stdout() Option {
 	}
 }
 
-// New a logger
-func New(opts ...Option) (*Logger, error) {
+// Init logger
+func Init(opts ...Option) (*Logger, error) {
 	logger := new(Logger)
 	for _, opt := range opts {
 		if err := opt(logger); err != nil {
