@@ -9,6 +9,39 @@ import (
 	"time"
 )
 
+func TestResetRotateTime(t *testing.T) {
+	tests := []struct {
+		Mode   fileRotateMode
+		Expect func() int64
+	}{
+		{FileRotateHourly, func() int64 {
+			ts := time.Now()
+			return time.Date(ts.Year(), ts.Month(), ts.Day(), ts.Hour()+1, 0, 0, 0, time.Local).Unix()
+		}},
+		{FileRotateDaily, func() int64 {
+			ts := time.Now().AddDate(0, 0, 1)
+			return time.Date(ts.Year(), ts.Month(), ts.Day(), 0, 0, 0, 0, time.Local).Unix()
+		}},
+		{FileRotateWeekly, func() int64 {
+			ts := time.Now()
+			ts = ts.AddDate(0, 0, 7-int(ts.Weekday()))
+			return time.Date(ts.Year(), ts.Month(), ts.Day(), 0, 0, 0, 0, time.Local).Unix()
+		}},
+		{FileRotateMonthly, func() int64 {
+			ts := time.Now().AddDate(0, 1, 0)
+			return time.Date(ts.Year(), ts.Month(), 0, 0, 0, 0, 0, time.Local).Unix()
+		}},
+	}
+
+	for _, c := range tests {
+		timestamp := resetRotateTime(c.Mode)
+		if timestamp != c.Expect() {
+			t.Errorf("Expect: %d, got: %d for mode %d", c.Expect(), timestamp, c.Mode)
+			return
+		}
+	}
+}
+
 func TestFileWriterRotate(t *testing.T) {
 	dir := os.TempDir()
 	filename := fmt.Sprintf("file_%d.log", time.Now().Unix())

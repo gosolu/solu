@@ -14,6 +14,7 @@ const (
 	FileRotateNone fileRotateMode = iota
 	FileRotateHourly
 	FileRotateDaily
+	FileRotateWeekly
 	FileRotateMonthly
 )
 
@@ -35,14 +36,17 @@ type fileWriter struct {
 
 func resetRotateTime(mode fileRotateMode) int64 {
 	now := time.Now()
-	next := time.Date(now.Year(), now.Month(), now.Day(), now.Hour(), 0, 0, 0, time.Local)
+	var next time.Time
 	switch mode {
 	case FileRotateHourly:
-		next = next.Add(time.Hour)
+		next = time.Date(now.Year(), now.Month(), now.Day(), now.Hour()+1, 0, 0, 0, time.Local)
 	case FileRotateDaily:
-		next = next.AddDate(0, 0, 1)
+		next = time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, time.Local)
+	case FileRotateWeekly:
+		nDays := 7 - now.Weekday()
+		next = time.Date(now.Year(), now.Month(), now.Day()+int(nDays), 0, 0, 0, 0, time.Local)
 	case FileRotateMonthly:
-		next = next.AddDate(0, 1, 0)
+		next = time.Date(now.Year(), now.Month()+1, 0, 0, 0, 0, 0, time.Local)
 	case FileRotateNone:
 		fallthrough
 	default:
