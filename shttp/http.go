@@ -1,4 +1,4 @@
-// Package shttp contains some golang HTTP client methods
+// Package shttp contains some golang HTTP utilities
 package shttp
 
 import (
@@ -49,10 +49,48 @@ func doWithClient(ctx context.Context, req *http.Request, client *http.Client) (
 	return res, err
 }
 
+// Do http request, use http.DefaultClient.Do
+// Wrap request with metrics and trace headers
 func Do(ctx context.Context, req *http.Request) (*http.Response, error) {
 	return doWithClient(ctx, req, http.DefaultClient)
 }
 
+// DoClient do http request, use client
+// Wrap request with metrics and trace headers
 func DoClient(ctx context.Context, req *http.Request, client *http.Client) (*http.Response, error) {
 	return doWithClient(ctx, req, client)
+}
+
+func mergeTrace(ctx context.Context, res *http.Response) context.Context {
+	if res == nil {
+		return ctx
+	}
+	header := res.Header.Get(TraceparentHeader)
+	if header == "" {
+		return ctx
+	}
+	tid, sid, err := core.ParseTraceparent(header)
+	if err != nil {
+		return ctx
+	}
+	if core.TraceID(ctx) == "" {
+		ctx = core.TraceWith(ctx, tid)
+	}
+	if core.SpanID(ctx) == "" {
+		ctx = core.SpanWith(ctx, sid)
+	}
+	return ctx
+}
+
+// InheritTrace extract trace informations from http response and return a context
+// with trace ID and span ID if them exist.
+func InheritTrace(res *http.Response) context.Context {
+	ctx := context.Background()
+	return mergeTrace(ctx, res)
+}
+
+// FulfillTrace extract trace informations from http response and fulfill income
+// context with trace or span IDs.
+func FulfillTrace(ctx context.Context, res *http.Response) context.Context {
+	return mergeTrace(ctx, res)
 }

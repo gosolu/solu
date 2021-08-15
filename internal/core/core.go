@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"fmt"
+	"strings"
 )
 
 type (
@@ -37,6 +38,16 @@ func SpanID(ctx context.Context) string {
 	return ""
 }
 
+// TraceWith create a new context with a given trace ID
+func TraceWith(ctx context.Context, traceID string) context.Context {
+	return context.WithValue(ctx, TraceKey, traceID)
+}
+
+// SpanWith create a new context with a given span ID
+func SpanWith(ctx context.Context, spanID string) context.Context {
+	return context.WithValue(ctx, SpanKey, spanID)
+}
+
 // Trace specification
 // see https://w3c.github.io/trace-context
 const (
@@ -49,4 +60,17 @@ func TraceparentValue(ctx context.Context) string {
 	tid := TraceID(ctx)
 	sid := SpanID(ctx)
 	return fmt.Sprintf("%s-%s-%s-%s", TraceVersion, tid, sid, TraceFlag)
+}
+
+// ParseTraceparent parse formatted traceparent value
+// It returns TraceID and SpanID, ignore version and flags
+// If a value is not correct formatted, it will return an error.
+func ParseTraceparent(val string) (string, string, error) {
+	parts := strings.Split(val, "-")
+	if len(parts) != 4 {
+		return "", "", fmt.Errorf("invalid trace value")
+	}
+	tid := parts[1]
+	sid := parts[2]
+	return tid, sid, nil
 }

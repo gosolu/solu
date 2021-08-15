@@ -255,55 +255,33 @@ func (log *Logger) clone() *Logger {
 // Trace create a new context mixed with logger
 func Trace(ctx context.Context) context.Context {
 	id := newTraceID()
-	return context.WithValue(ctx, core.TraceKey, id)
+	return core.TraceWith(ctx, id)
 }
 
 // TraceWith create a new context with a given trace ID
 func TraceWith(ctx context.Context, id string) context.Context {
-	return context.WithValue(ctx, core.TraceKey, id)
-}
-
-// TraceID returns the current context trace ID
-func TraceID(ctx context.Context) string {
-	val := ctx.Value(core.TraceKey)
-	if val != nil {
-		if value, ok := val.(string); ok {
-			return value
-		}
-	}
-	return ""
-}
-
-// SpanID returns context's span ID
-func SpanID(ctx context.Context) string {
-	val := ctx.Value(core.SpanKey)
-	if val != nil {
-		if value, ok := val.(string); ok {
-			return value
-		}
-	}
-	return ""
+	return core.TraceWith(ctx, id)
 }
 
 // Fork context will create a new span that inherit parent context's trace ID
 func Fork(ctx context.Context) context.Context {
-	if TraceID(ctx) == "" {
+	if core.TraceID(ctx) == "" {
 		ctx = Trace(ctx)
 	}
 	sid := newSpanID()
-	return context.WithValue(ctx, core.SpanKey, sid)
+	return core.SpanWith(ctx, sid)
 }
 
 // In try extract logger instance from context
 func In(ctx context.Context) *Logger {
-	tid := TraceID(ctx)
+	tid := core.TraceID(ctx)
 	if tid == "" {
 		tid = newTraceID()
 	}
 	fields := []Field{
 		Str(traceKeyName, tid),
 	}
-	sid := SpanID(ctx)
+	sid := core.SpanID(ctx)
 	if sid != "" {
 		fields = append(fields, Str(spanKeyName, sid))
 	}
