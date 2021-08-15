@@ -25,17 +25,6 @@ const (
 	LogLevelFatal = "fatal"
 )
 
-const (
-	traceKeyName = "gTrace"
-	spanKeyName  = "gSpan"
-
-	timeKeyName       = "gTime"
-	levelKeyName      = "gLevel"
-	callerKeyName     = "gCaller"
-	messageKeyName    = "gMsg"
-	stacktraceKeyName = "gStack"
-)
-
 func initLogger(level string, sampling *zap.SamplingConfig, syncers ...zapcore.WriteSyncer) (*zap.Logger, error) {
 	var logLevel zapcore.Level
 	switch strings.ToLower(level) {
@@ -58,11 +47,11 @@ func initLogger(level string, sampling *zap.SamplingConfig, syncers ...zapcore.W
 	}
 
 	encoderConfig := zapcore.EncoderConfig{
-		TimeKey:        timeKeyName,
-		LevelKey:       levelKeyName,
-		CallerKey:      callerKeyName,
-		MessageKey:     messageKeyName,
-		StacktraceKey:  stacktraceKeyName,
+		TimeKey:        core.LogTimeKey,
+		LevelKey:       core.LogLevelKey,
+		CallerKey:      core.LogCallerKey,
+		MessageKey:     core.LogMessageKey,
+		StacktraceKey:  core.LogTraceKey,
 		LineEnding:     zapcore.DefaultLineEnding,
 		EncodeLevel:    zapcore.LowercaseLevelEncoder,
 		EncodeTime:     zapcore.RFC3339TimeEncoder,
@@ -279,11 +268,11 @@ func In(ctx context.Context) *Logger {
 		tid = newTraceID()
 	}
 	fields := []Field{
-		Str(traceKeyName, tid),
+		Str(core.LogTraceKey, tid),
 	}
 	sid := core.SpanID(ctx)
 	if sid != "" {
-		fields = append(fields, Str(spanKeyName, sid))
+		fields = append(fields, Str(core.LogSpanKey, sid))
 	}
 	return gLogger.With(fields...)
 }
