@@ -7,6 +7,13 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/gosolu/solu/internal/core"
+)
+
+const (
+	TraceparentHeader = "traceparent"
+	TracestateHeader  = "tracestate"
 )
 
 func metricLabels(res *http.Response, dur time.Duration) []string {
@@ -25,6 +32,11 @@ func doWithClient(ctx context.Context, req *http.Request, client *http.Client) (
 	}
 	if client == nil {
 		return nil, fmt.Errorf("invalid client")
+	}
+	// add trace header
+	if req.Header.Get(TraceparentHeader) == "" {
+		trace := core.TraceparentValue(ctx)
+		req.Header.Set(TraceparentHeader, trace)
 	}
 	start := time.Now()
 	res, err := client.Do(req)

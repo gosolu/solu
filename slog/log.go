@@ -9,11 +9,12 @@ import (
 	"io"
 	"os"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+
+	"github.com/gosolu/solu/internal/core"
 )
 
 const (
@@ -113,6 +114,15 @@ func init() {
 
 func newTraceID() string {
 	var bts [16]byte
+	_, err := io.ReadFull(rand.Reader, bts[:])
+	if err != nil {
+		panic(err)
+	}
+	return hex.EncodeToString(bts[:])
+}
+
+func newSpanID() string {
+	var bts [8]byte
 	_, err := io.ReadFull(rand.Reader, bts[:])
 	if err != nil {
 		panic(err)
@@ -242,24 +252,20 @@ func (log *Logger) clone() *Logger {
 	return &cp
 }
 
-type traceType struct{}
-
-var traceKey traceType
-
 // Trace create a new context mixed with logger
 func Trace(ctx context.Context) context.Context {
 	id := newTraceID()
-	return context.WithValue(ctx, traceKey, id)
+	return context.WithValue(ctx, core.TraceKey, id)
 }
 
 // TraceWith create a new context with a given trace ID
 func TraceWith(ctx context.Context, id string) context.Context {
-	return context.WithValue(ctx, traceKey, id)
+	return context.WithValue(ctx, core.TraceKey, id)
 }
 
 // TraceID returns the current context trace ID
 func TraceID(ctx context.Context) string {
-	val := ctx.Value(traceKey)
+	val := ctx.Value(core.TraceKey)
 	if val != nil {
 		if value, ok := val.(string); ok {
 			return value
@@ -268,43 +274,40 @@ func TraceID(ctx context.Context) string {
 	return ""
 }
 
-// global fork index
-var (
-	forkIndex uint64
-)
-
-// Fork context that inherit parent context's trace ID
-func Fork(ctx context.Context) context.Context {
-	var tid string
-	val := ctx.Value(traceKey)
+// SpanID returns context's span ID
+func SpanID(ctx context.Context) string {
+	val := ctx.Value(core.SpanKey)
 	if val != nil {
-		if v, ok := val.(string); ok {
-			tid = v
+		if value, ok := val.(string); ok {
+			return value
 		}
 	}
-	pexists := true
-	if tid == "" {
-		tid = newTraceID()
-		pexists = false
+	return ""
+}
+
+// Fork context will create a new span that inherit parent context's trace ID
+func Fork(ctx context.Context) context.Context {
+	if TraceID(ctx) == "" {
+		ctx = Trace(ctx)
 	}
-	if pexists {
-		idx := atomic.AddUint64(&forkIndex, 1)
-		tid = fmt.Sprintf("%s:%d", tid, idx)
-	}
-	return context.WithValue(ctx, traceKey, tid)
+	sid := newSpanID()
+	return context.WithValue(ctx, core.SpanKey, sid)
 }
 
 // In try extract logger instance from context
 func In(ctx context.Context) *Logger {
-	val := ctx.Value(traceKey)
-	if val == nil {
-		return gLogger.With(String(traceKeyName, newTraceID()))
+	tid := TraceID(ctx)
+	if tid == "" {
+		tid = newTraceID()
 	}
-	v, ok := val.(string)
-	if !ok {
-		return gLogger.With(String(traceKeyName, newTraceID()))
+	fields := []Field{
+		Str(traceKeyName, tid),
 	}
-	return gLogger.With(String(traceKeyName, v))
+	sid := SpanID(ctx)
+	if sid != "" {
+		fields = append(fields, Str(spanKeyName, sid))
+	}
+	return gLogger.With(fields...)
 }
 
 // With fields
