@@ -16,12 +16,22 @@ const (
 	TracestateHeader  = "tracestate"
 )
 
-func metricLabels(res *http.Response, dur time.Duration) []string {
+func metricLabels(req *http.Request, res *http.Response, dur time.Duration) []string {
+	if req == nil && res != nil {
+		req = res.Request
+	}
+	if req == nil {
+		return nil
+	}
+	var statusCode int
+	if res != nil {
+		statusCode = res.StatusCode
+	}
 	labels := make([]string, 0, len(requestLabels))
-	labels = append(labels, res.Request.Method)
-	labels = append(labels, res.Request.Host)
-	labels = append(labels, res.Request.URL.Path)
-	labels = append(labels, strconv.Itoa(res.StatusCode))
+	labels = append(labels, req.Method)
+	labels = append(labels, req.Host)
+	labels = append(labels, req.URL.Path)
+	labels = append(labels, strconv.Itoa(statusCode))
 	labels = append(labels, strconv.FormatInt(dur.Milliseconds(), 10))
 	return labels
 }
@@ -40,7 +50,7 @@ func doWithClient(ctx context.Context, req *http.Request, client *http.Client) (
 	}
 	start := time.Now()
 	res, err := client.Do(req)
-	labels := metricLabels(res, time.Now().Sub(start))
+	labels := metricLabels(req, res, time.Now().Sub(start))
 	if err != nil {
 		httpErrorCounter.WithLabelValues(labels...).Inc()
 	} else {
