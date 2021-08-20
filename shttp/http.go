@@ -6,10 +6,34 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gosolu/solu/internal/core"
+	"github.com/gosolu/solu/slog"
 )
+
+var (
+	features = "metric"
+
+	enableMetric = false
+	enableTrace  = false
+	enableSlog   = false
+)
+
+func init() {
+	fs := strings.Split(features, ",")
+	for _, f := range fs {
+		switch strings.ToLower(f) {
+		case "metric":
+			enableMetric = true
+		case "trace":
+			enableTrace = true
+		case "slog":
+			enableSlog = true
+		}
+	}
+}
 
 const (
 	TraceparentHeader = "traceparent"
@@ -43,19 +67,41 @@ func doWithClient(ctx context.Context, req *http.Request, client *http.Client) (
 	if client == nil {
 		return nil, fmt.Errorf("invalid client")
 	}
-	// add trace header
-	if req.Header.Get(TraceparentHeader) == "" {
-		trace := core.TraceparentValue(ctx)
-		req.Header.Set(TraceparentHeader, trace)
+
+	if enableTrace {
+		// add trace header
+		if req.Header.Get(TraceparentHeader) == "" {
+			trace := core.TraceparentValue(ctx)
+			req.Header.Set(TraceparentHeader, trace)
+		}
 	}
+
 	start := time.Now()
 	res, err := client.Do(req)
-	labels := metricLabels(req, res, time.Now().Sub(start))
-	if err != nil {
-		httpErrorCounter.WithLabelValues(labels...).Inc()
-	} else {
-		httpRequestCounter.WithLabelValues(labels...).Inc()
+
+	if enableMetric {
+		labels := metricLabels(req, res, time.Now().Sub(start))
+		if err != nil {
+			httpErrorCounter.WithLabelValues(labels...).Inc()
+		} else {
+			httpRequestCounter.WithLabelValues(labels...).Inc()
+		}
 	}
+	if enableSlog {
+		fields := []slog.Field{
+			slog.Str("method", req.Method),
+			slog.Str("host", req.URL.Host),
+			slog.Str("path", req.URL.Path),
+		}
+		if res != nil {
+			fields = append(fields, slog.I("code", res.StatusCode), slog.F64("duration", time.Now().Sub(start).Seconds()))
+		}
+		if err != nil {
+			fields = append(fields, slog.Err(err))
+		}
+		slog.In(ctx).With(fields...).Info("Request")
+	}
+
 	return res, err
 }
 

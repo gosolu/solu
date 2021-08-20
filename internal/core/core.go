@@ -53,6 +53,9 @@ func SpanWith(ctx context.Context, spanID string) context.Context {
 const (
 	TraceVersion = "00" //
 	TraceFlag    = "00" // currently no flag support
+
+	TraceInvalidTid = "00000000000000000000000000000000"
+	TraceInvalidSid = "0000000000000000"
 )
 
 // TraceparentValue returns traceparent http header value
@@ -71,6 +74,12 @@ func ParseTraceparent(val string) (string, string, error) {
 		return "", "", fmt.Errorf("invalid trace value")
 	}
 	tid := parts[1]
+	if len(tid) != len(TraceInvalidTid) || tid == TraceInvalidTid {
+		tid = ""
+	}
 	sid := parts[2]
+	if len(sid) != len(TraceInvalidSid) || sid == TraceInvalidSid {
+		sid = ""
+	}
 	return tid, sid, nil
 }
