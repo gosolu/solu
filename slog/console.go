@@ -18,11 +18,13 @@ func newConsoleWriter() *consoleWriter {
 func (cw *consoleWriter) Write(data []byte) (int, error) {
 	n, err := cw.writer.Write(data)
 
-	label := "ok"
-	if err != nil {
-		label = "error"
+	if enableMetric {
+		label := "ok"
+		if err != nil {
+			label = "error"
+		}
+		consoleWriteCounter.WithLabelValues(label).Inc()
 	}
-	consoleWriteCounter.WithLabelValues(label).Inc()
 
 	return n, err
 }

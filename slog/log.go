@@ -17,6 +17,22 @@ import (
 	"github.com/gosolu/solu/internal/core"
 )
 
+var (
+	features = ""
+
+	enableMetric = false
+)
+
+func init() {
+	fs := strings.Split(features, ",")
+	for _, f := range fs {
+		switch strings.ToLower(f) {
+		case "metric":
+			enableMetric = true
+		}
+	}
+}
+
 const (
 	LogLevelDebug = "debug"
 	LogLevelInfo  = "info"

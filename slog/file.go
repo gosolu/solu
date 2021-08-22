@@ -84,13 +84,15 @@ func timestampSuffix(t int64) string {
 }
 
 func (fw *fileWriter) rotate() (err error) {
-	defer func() {
-		label := "ok"
-		if err != nil {
-			label = "error"
-		}
-		fileRotateCounter.WithLabelValues(label).Inc()
-	}()
+	if enableMetric {
+		defer func() {
+			label := "ok"
+			if err != nil {
+				label = "error"
+			}
+			fileRotateCounter.WithLabelValues(label).Inc()
+		}()
+	}
 	// close original log file
 	if err = fw.fs.Close(); err != nil {
 		return err
@@ -132,13 +134,15 @@ func (fw *fileWriter) Write(data []byte) (n int, err error) {
 	fw.mux.Lock()
 	defer fw.mux.Unlock()
 
-	defer func() {
-		label := "ok"
-		if err != nil {
-			label = "error"
-		}
-		fileWriteCounter.WithLabelValues(label).Inc()
-	}()
+	if enableMetric {
+		defer func() {
+			label := "ok"
+			if err != nil {
+				label = "error"
+			}
+			fileWriteCounter.WithLabelValues(label).Inc()
+		}()
+	}
 
 	if fw.fs == nil {
 		if err = fw.initFile(); err != nil {
