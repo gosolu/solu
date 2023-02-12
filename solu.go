@@ -15,8 +15,9 @@ type (
 )
 
 var (
-	abortContextKey   abortContextType
-	abortContextValue bool
+	abortContextKey abortContextType
+
+	abortDefaultReason = "Server encounter an error"
 )
 
 func isAborted(ctx context.Context) bool {
@@ -32,8 +33,8 @@ func isAborted(ctx context.Context) bool {
 
 func Abort(ctx context.Context) context.Context {
 	val := &abortValueType{
-		status: http.StatusOK,
-		reason: "server abort",
+		status: http.StatusInternalServerError,
+		reason: abortDefaultReason,
 	}
 	return context.WithValue(ctx, abortContextKey, val)
 }
@@ -41,7 +42,27 @@ func Abort(ctx context.Context) context.Context {
 func AbortWithStatus(ctx context.Context, status int) context.Context {
 	val := &abortValueType{
 		status: status,
-		reason: "server abort",
+		reason: abortDefaultReason,
+	}
+	return context.WithValue(ctx, abortContextKey, val)
+}
+
+func AbortWithStatusReason(ctx context.Context, status int, reason string) context.Context {
+	val := &abortValueType{
+		status: status,
+		reason: reason,
+	}
+	return context.WithValue(ctx, abortContextKey, val)
+}
+
+func AbortWithError(ctx context.Context, err error) context.Context {
+	var reason string
+	if err != nil {
+		reason = err.Error()
+	}
+	val := &abortValueType{
+		status: http.StatusInternalServerError,
+		reason: reason,
 	}
 	return context.WithValue(ctx, abortContextKey, val)
 }
