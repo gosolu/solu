@@ -2,7 +2,10 @@ package shttp
 
 import (
 	"context"
+	"net"
 	"net/http"
+	"sync"
+	"time"
 )
 
 type (
@@ -64,4 +67,57 @@ func AbortWithError(ctx context.Context, err error) context.Context {
 		reason: reason,
 	}
 	return context.WithValue(ctx, abortContextKey, val)
+}
+
+type connMiddleware struct {
+	sync.Mutex
+
+	middlewares []func(context.Context) context.Context
+}
+
+func (cm *connMiddleware) Add(fn func(context.Context) context.Context) {
+	cm.Lock()
+	defer cm.Unlock()
+	cm.middlewares = append(cm.middlewares, fn)
+}
+
+var gConnMiddles = &connMiddleware{
+	middlewares: make([]func(context.Context) context.Context, 0),
+}
+
+func AddToConnContext(fns ...func(context.Context) context.Context) {
+	for _, fn := range fns {
+		gConnMiddles.Add(fn)
+	}
+}
+
+type startupContextType struct{}
+
+var startupContextKey startupContextType
+
+func ListenAndServe(addr string, handler http.Handler) error {
+	if handler != nil {
+		gRouter.NotFound = handler
+	}
+	connContext := func(ctx context.Context, c net.Conn) context.Context {
+		gConnMiddles.Lock()
+		defer gConnMiddles.Unlock()
+
+		ctx = context.WithValue(ctx, startupContextKey, time.Now().Unix())
+		for _, fn := range gConnMiddles.middlewares {
+			fnContext := fn(ctx)
+			// check startup context to verify context
+			if val := fnContext.Value(startupContextKey); val == nil {
+				continue
+			}
+			ctx = fnContext
+		}
+		return ctx
+	}
+	server := &http.Server{
+		Addr:        addr,
+		Handler:     gRouter,
+		ConnContext: connContext,
+	}
+	return server.ListenAndServe()
 }
