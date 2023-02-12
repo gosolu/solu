@@ -1,4 +1,4 @@
-package solu
+package shttp
 
 import (
 	"context"
