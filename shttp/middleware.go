@@ -23,6 +23,9 @@ import (
 // A middleware can abort request or allow it continue.
 type MiddlewareHandle func(w http.ResponseWriter, r *http.Request) context.Context
 
+// ContextWranFn is a function wrap context with value and return a new context.
+type ContextWrapFn func(context.Context) context.Context
+
 func abortHandleFunc(w http.ResponseWriter, r *http.Request) {
 	abort, ok := r.Context().Value(abortContextKey).(*abortValueType)
 	if !ok {

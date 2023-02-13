@@ -69,23 +69,36 @@ func AbortWithError(ctx context.Context, err error) context.Context {
 	return context.WithValue(ctx, abortContextKey, val)
 }
 
-type connMiddleware struct {
+type contextMiddleware struct {
 	sync.Mutex
 
-	middlewares []func(context.Context) context.Context
+	middlewares []ContextWrapFn
 }
 
-func (cm *connMiddleware) Add(fn func(context.Context) context.Context) {
+func (cm *contextMiddleware) Add(fn ContextWrapFn) {
 	cm.Lock()
 	defer cm.Unlock()
 	cm.middlewares = append(cm.middlewares, fn)
 }
 
-var gConnMiddles = &connMiddleware{
-	middlewares: make([]func(context.Context) context.Context, 0),
+var (
+	gConnMiddles = &contextMiddleware{
+		middlewares: make([]ContextWrapFn, 0),
+	}
+
+	gBaseMiddles = &contextMiddleware{
+		middlewares: make([]ContextWrapFn, 0),
+	}
+)
+
+// AddToBaseContext add middlewares to base context
+func AddToBaseContext(fns ...ContextWrapFn) {
+	for _, fn := range fns {
+		gBaseMiddles.Add(fn)
+	}
 }
 
-func AddToConnContext(fns ...func(context.Context) context.Context) {
+func AddToConnContext(fns ...ContextWrapFn) {
 	for _, fn := range fns {
 		gConnMiddles.Add(fn)
 	}
@@ -99,11 +112,27 @@ func ListenAndServe(addr string, handler http.Handler) error {
 	if handler != nil {
 		gRouter.NotFound = handler
 	}
+	baseContext := func(ln net.Listener) context.Context {
+		gBaseMiddles.Lock()
+		defer gBaseMiddles.Unlock()
+
+		ctx := context.Background()
+		ctx = context.WithValue(ctx, startupContextKey, time.Now().Unix())
+		for _, fn := range gBaseMiddles.middlewares {
+			fnCtx := fn(ctx)
+			// check startup context to verify context
+			if val := fnCtx.Value(startupContextKey); val == nil {
+				continue
+			}
+			ctx = fnCtx
+		}
+		return ctx
+	}
+
 	connContext := func(ctx context.Context, c net.Conn) context.Context {
 		gConnMiddles.Lock()
 		defer gConnMiddles.Unlock()
 
-		ctx = context.WithValue(ctx, startupContextKey, time.Now().Unix())
 		for _, fn := range gConnMiddles.middlewares {
 			fnContext := fn(ctx)
 			// check startup context to verify context
@@ -117,6 +146,7 @@ func ListenAndServe(addr string, handler http.Handler) error {
 	server := &http.Server{
 		Addr:        addr,
 		Handler:     gRouter,
+		BaseContext: baseContext,
 		ConnContext: connContext,
 	}
 	return server.ListenAndServe()
