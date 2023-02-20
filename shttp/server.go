@@ -57,50 +57,53 @@ func AbortWithStatusReason(ctx context.Context, status int, reason string) conte
 	return context.WithValue(ctx, abortContextKey, val)
 }
 
-func AbortWithError(ctx context.Context, err error) context.Context {
+func AbortWithError(ctx context.Context, status int, err error) context.Context {
 	var reason string
 	if err != nil {
 		reason = err.Error()
 	}
 	val := &abortValueType{
-		status: http.StatusInternalServerError,
+		status: status,
 		reason: reason,
 	}
 	return context.WithValue(ctx, abortContextKey, val)
 }
 
-type contextMiddleware struct {
-	sync.Mutex
-
-	middlewares []ContextWrapFn
+func Redirect(ctx context.Context, status int, path string) {
 }
 
-func (cm *contextMiddleware) Add(fn ContextWrapFn) {
-	cm.Lock()
-	defer cm.Unlock()
-	cm.middlewares = append(cm.middlewares, fn)
+type contextHooks struct {
+	sync.Mutex
+
+	hooks []ContextHook
+}
+
+func (ch *contextHooks) Add(hook ContextHook) {
+	ch.Lock()
+	defer ch.Unlock()
+	ch.hooks = append(ch.hooks, hook)
 }
 
 var (
-	gConnMiddles = &contextMiddleware{
-		middlewares: make([]ContextWrapFn, 0),
+	gBaseHooks = &contextHooks{
+		hooks: make([]ContextHook, 0),
 	}
 
-	gBaseMiddles = &contextMiddleware{
-		middlewares: make([]ContextWrapFn, 0),
+	gConnHooks = &contextHooks{
+		hooks: make([]ContextHook, 0),
 	}
 )
 
 // AddToBaseContext add middlewares to base context
-func AddToBaseContext(fns ...ContextWrapFn) {
-	for _, fn := range fns {
-		gBaseMiddles.Add(fn)
+func AddToBaseContext(hooks ...ContextHook) {
+	for _, hook := range hooks {
+		gBaseHooks.Add(hook)
 	}
 }
 
-func AddToConnContext(fns ...ContextWrapFn) {
-	for _, fn := range fns {
-		gConnMiddles.Add(fn)
+func AddToConnContext(hooks ...ContextHook) {
+	for _, hook := range hooks {
+		gConnHooks.Add(hook)
 	}
 }
 
@@ -108,17 +111,31 @@ type startupContextType struct{}
 
 var startupContextKey startupContextType
 
+func isValidContext(ctx context.Context) bool {
+	if ctx == nil {
+		return false
+	}
+	val := ctx.Value(startupContextKey)
+	if val == nil {
+		return false
+	}
+	if start, ok := val.(int64); !ok || start <= 0 {
+		return false
+	}
+	return true
+}
+
 func ListenAndServe(addr string, handler http.Handler) error {
 	if handler != nil {
 		gRouter.NotFound = handler
 	}
 	baseContext := func(ln net.Listener) context.Context {
-		gBaseMiddles.Lock()
-		defer gBaseMiddles.Unlock()
+		gBaseHooks.Lock()
+		defer gBaseHooks.Unlock()
 
 		ctx := context.Background()
 		ctx = context.WithValue(ctx, startupContextKey, time.Now().Unix())
-		for _, fn := range gBaseMiddles.middlewares {
+		for _, fn := range gBaseHooks.hooks {
 			fnCtx := fn(ctx)
 			// check startup context to verify context
 			if val := fnCtx.Value(startupContextKey); val == nil {
@@ -130,16 +147,16 @@ func ListenAndServe(addr string, handler http.Handler) error {
 	}
 
 	connContext := func(ctx context.Context, c net.Conn) context.Context {
-		gConnMiddles.Lock()
-		defer gConnMiddles.Unlock()
+		gConnHooks.Lock()
+		defer gConnHooks.Unlock()
 
-		for _, fn := range gConnMiddles.middlewares {
-			fnContext := fn(ctx)
+		for _, fn := range gConnHooks.hooks {
+			fnCtx := fn(ctx)
 			// check startup context to verify context
-			if val := fnContext.Value(startupContextKey); val == nil {
+			if val := fnCtx.Value(startupContextKey); val == nil {
 				continue
 			}
-			ctx = fnContext
+			ctx = fnCtx
 		}
 		return ctx
 	}

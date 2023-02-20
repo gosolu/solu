@@ -5,11 +5,11 @@ import (
 	"net/http"
 )
 
-// MiddlewareHandle handle http request before user-defined handler func.
+// IncomeHook hook http request before user-defined handler func.
 //
 // For example, if you need authorize client before real operations:
 //
-//	func authMiddleware(w http.ResponseWriter, r *http.Request) context.Context {
+//	func authHook(r *http.Request) context.Context {
 //		auth, err := r.Cookie("auth_key")
 //		if err != nil || auth.Valid() != nil {
 //			return r.Context()
@@ -20,32 +20,68 @@ import (
 //		return context.WithValue(r.Context(), "user", auth)
 //	}
 //
-// A middleware can abort request or allow it continue.
-type MiddlewareHandle func(w http.ResponseWriter, r *http.Request) context.Context
+// A hook can abort request or allow it continue.
+type IncomeHook func(r *http.Request) context.Context
 
-// ContextWranFn is a function wrap context with value and return a new context.
-type ContextWrapFn func(context.Context) context.Context
+type ReplyHook func(w http.ResponseWriter, r *http.Request) context.Context
+
+// ContextHook a function hook context with value and return a new context.
+type ContextHook func(context.Context) context.Context
 
 func abortHandleFunc(w http.ResponseWriter, r *http.Request) {
-	abort, ok := r.Context().Value(abortContextKey).(*abortValueType)
+	abortVal := r.Context().Value(abortContextKey)
+	if abortVal == nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		// TODO: invalid nil abort
+		return
+	}
+	abort, ok := abortVal.(*abortValueType)
 	if !ok {
-		w.WriteHeader(http.StatusOK)
+		w.WriteHeader(http.StatusInternalServerError)
+		// TODO: incorrect abort value
 		return
 	}
 	w.WriteHeader(abort.status)
 	w.Write([]byte(abort.reason))
 }
 
-func With(handle http.HandlerFunc, middlewares ...MiddlewareHandle) http.HandlerFunc {
+func WithRequestHooks(handle http.HandlerFunc, hooks ...IncomeHook) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		for _, mid := range middlewares {
-			ctx := mid(w, r)
+		for _, hook := range hooks {
+			ctx := hook(r)
+			if !isValidContext(ctx) {
+				continue
+			}
+			r = r.WithContext(ctx)
 			if isAborted(ctx) {
 				abortHandleFunc(w, r)
 				return
 			}
-			r = r.WithContext(ctx)
 		}
 		handle(w, r)
+	}
+}
+
+func WithResponseHooks(handle http.HandlerFunc, hooks ...ReplyHook) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		handle(w, r)
+
+		ctx := r.Context()
+		if isAborted(ctx) {
+			abortHandleFunc(w, r)
+			return
+		}
+
+		for _, hook := range hooks {
+			ctx := hook(w, r)
+			if !isValidContext(ctx) {
+				continue
+			}
+			r = r.WithContext(ctx)
+			if isAborted(ctx) {
+				abortHandleFunc(w, r)
+				return
+			}
+		}
 	}
 }
