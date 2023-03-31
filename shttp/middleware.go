@@ -2,6 +2,7 @@ package shttp
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 )
 
@@ -41,6 +42,10 @@ func abortHandleFunc(w http.ResponseWriter, r *http.Request) {
 		// TODO: incorrect abort value
 		return
 	}
+	if abort.redirect {
+		http.Redirect(w, r, abort.reason, abort.status)
+		return
+	}
 	w.WriteHeader(abort.status)
 	w.Write([]byte(abort.reason))
 }
@@ -58,6 +63,7 @@ func WithRequestHooks(handle http.HandlerFunc, hooks ...IncomeHook) http.Handler
 				return
 			}
 		}
+		fmt.Println("prepare handle")
 		handle(w, r)
 	}
 }

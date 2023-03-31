@@ -80,7 +80,7 @@ func newFileWriter(dir, filename string, max int, rotate fileRotateMode) (*fileW
 const timestampFormat = "20060102150405"
 
 func timestampSuffix(t int64) string {
-	return time.Unix(t, 0).Format(timestampFormat)
+	return time.Unix(t, 0).Format(time.DateTime)
 }
 
 func (fw *fileWriter) rotate() (err error) {

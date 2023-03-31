@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gosolu/solu/internal/core"
+	"github.com/gosolu/solu"
 	"github.com/gosolu/solu/slog"
 )
 
@@ -71,7 +71,7 @@ func doWithClient(ctx context.Context, req *http.Request, client *http.Client) (
 	if enableTrace {
 		// add trace header
 		if req.Header.Get(TraceparentHeader) == "" {
-			trace := core.TraceparentValue(ctx)
+			trace := solu.TraceparentValue(ctx)
 			req.Header.Set(TraceparentHeader, trace)
 		}
 	}
@@ -125,15 +125,15 @@ func mergeTrace(ctx context.Context, res *http.Response) context.Context {
 	if header == "" {
 		return ctx
 	}
-	tid, sid, err := core.ParseTraceparent(header)
+	tid, sid, err := solu.ParseTraceparent(header)
 	if err != nil {
 		return ctx
 	}
-	if core.TraceID(ctx) == "" {
-		ctx = core.TraceWith(ctx, tid)
+	if solu.TraceID(ctx) == "" {
+		ctx = solu.TraceWith(ctx, tid)
 	}
-	if core.SpanID(ctx) == "" {
-		ctx = core.SpanWith(ctx, sid)
+	if solu.SpanID(ctx) == "" {
+		ctx = solu.SpanWith(ctx, sid)
 	}
 	return ctx
 }

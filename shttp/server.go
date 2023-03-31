@@ -11,8 +11,9 @@ import (
 type (
 	abortContextType struct{}
 	abortValueType   struct {
-		status int
-		reason string
+		status   int
+		reason   string
+		redirect bool
 	}
 )
 
@@ -30,7 +31,7 @@ func isAborted(ctx context.Context) bool {
 	if val == nil {
 		return false
 	}
-	return val != nil
+	return val.status != 0
 }
 
 func Abort(ctx context.Context) context.Context {
@@ -69,7 +70,13 @@ func AbortWithError(ctx context.Context, status int, err error) context.Context 
 	return context.WithValue(ctx, abortContextKey, val)
 }
 
-func Redirect(ctx context.Context, status int, path string) {
+func Redirect(ctx context.Context, status int, path string) context.Context {
+	val := &abortValueType{
+		status:   status,
+		reason:   path,
+		redirect: true,
+	}
+	return context.WithValue(ctx, abortContextKey, val)
 }
 
 type contextHooks struct {
